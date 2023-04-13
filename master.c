@@ -27,20 +27,20 @@ int main(int argc, char *argv[]){
 
   //crear slaves, y abrir los pipes
   size_t slaves = (argc) / 2 > SLAVE_MAX? SLAVE_MAX:(argc)/2;
-  printf("slaves created: %d\n", slaves);
+  printf("slaves created: %zu\n", slaves);
   for(size_t i = 0; i < slaves; i++) {
     if(pipe(pipes_array[i]) != 0) {
       perror("couldn't create pipe, exiting");
       return errno;
     }
-    printf("creating pipe nro: %d\n", i+1);
+    printf("creating pipe nro: %zu\n", i+1);
     if(fork() != 0) {
       //parent process
       close(pipes_array[i][0]);
     } else {
 
       //child process
-      printf("child nro: %d\n", i+1);
+      printf("child nro: %zu\n", i+1);
       close(pipes_array[i][1]);
       char* pipefd = int_to_str(pipes_array[i][0]);
       if(pipefd == NULL) {

@@ -1,8 +1,10 @@
-#ifndef
+#ifndef STORAGETAD_H
+#define STORAGETAD_H
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
-#endif
+
 
 typedef struct {
 
@@ -27,3 +29,6 @@ void free_TAD();
 
 
 //master llena el TAD, crea esclavos(execve), el esclavo le pide al TAD un par a procesar, hasta q no haya mas pares disponibles
+
+
+#endif

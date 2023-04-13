@@ -17,7 +17,7 @@ file_dir_pair_node * next;
 
 file_dir_pair_node * list;
 
-file_dir_pair_node * create_next(char * dirs[]);
+file_dir_pair_node * create_next(/*char * dirs[]*/); //nose si agregaste sin querer o no aca un argumento para la funcion
 
 void * alloc_mem(size_t bytes_size);
 
