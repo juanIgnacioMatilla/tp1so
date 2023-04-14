@@ -10,118 +10,244 @@
 #include <sys/wait.h>
 
 #define SLAVE_MAX 5
-#define BLOCK 5
+#define PERROR_ROUTINE(msg, value) {perror(msg);return value;}
+#define READ_END 0
+#define WRITE_END 1
+#define BUFFER_SIZE 256
 
 
-int pipes_array[SLAVE_MAX][2];
+typedef struct {
+  int master_to_slave_pfd[2];
+  int slave_to_master_pfd[2];
+  int pid;
+}slave_resources;
+
+typedef slave_resources slave_resources_array[SLAVE_MAX];
+slave_resources_array slave_array;
+
+int slaves;
+
+fd_set read_set;
+
+int setup_slaves(int args);
+int setup_child_pipes(int index);
+void on_exit_routine(int index);
+void close_master_pipes();
+
+int run_tasks(int file_count, char * files[]);
+int master_read();
+int deliver_task_pid();
+void deliver_all_once();
+int deliver_task_pid(int slave_pid, char * filename);
+
+slave_resources get_slave(int slave_pid);
 
 
-char * int_to_str(int src);
-
-int main(int argc, char *argv[]){
+int main(int argc, char *argv[]) {
   errno = 0;
-  if(argc == 1){
-    printf("Cantidad incorrecta de argumentos\n");
+  if(argc == 1) {
+    perror("Cantidad incorrecta de argumentos\n");
     return 0;
   }
+  int err_value;
+  if((err_value == setup_slaves(argc)) == -1)
+    PERROR_ROUTINE("Couldn't create slaves", errno);
+  printf("slaves created: %d\n", slaves);
 
-  //crear slaves, y abrir los pipes
-  size_t slaves = (argc) / 2 > SLAVE_MAX? SLAVE_MAX:(argc)/2;
-  printf("slaves created: %zu\n", slaves);
-  for(size_t i = 0; i < slaves; i++) {
-    if(pipe(pipes_array[i]) != 0) {
-      perror("couldn't create pipe, exiting");
-      return errno;
-    }
-    printf("creating pipe nro: %zu\n", i+1);
-    if(fork() != 0) {
-      //parent process
-      close(pipes_array[i][0]);
-    } else {
+  err_value = 0;
 
-      //child process
-      printf("child nro: %zu\n", i+1);
-      close(pipes_array[i][1]);
-      char* pipefd = int_to_str(pipes_array[i][0]);
-      if(pipefd == NULL) {
-        return errno;
-      }
+  run_tasks(argc-1, argv);
+  on_exit_routine(slaves);
 
-      printf("pipes fd made str, now will execve to slave\n");
-      execve("slave.out", &pipefd, NULL);
-    }
-  }
-  
-
-  size_t array_index = 0;
-  fd_set rfds[slaves];
-  for(;array_index < slaves; array_index++) {
-    FD_ZERO(&rfds[array_index]);
-    FD_SET(pipes_array[array_index][0], &rfds[array_index]);
-  }
-  printf("setted FD sets, now commencig to send files dirs\n");
-  array_index = 0;
-  int result = 0;
-  unsigned short writes = 0;
-  size_t argv_index = 0;
-  while(argv_index < argc) {
-    int ready = 0;
-    while (!ready) {
-      FD_ZERO(&rfds[array_index]);
-      FD_SET(pipes_array[array_index][0], &rfds[array_index]);
-      result = select(pipes_array[array_index][0] + 1, &rfds[array_index],NULL, NULL, NULL);
-      if (result < 0) {
-        perror("select failed");
-        return 1;
-      }
-      else if (result == 0) {
-        continue;
-      }
-      else if (FD_ISSET(pipes_array[array_index][0], &rfds[array_index])) {
-        ready = 1;
-      }
-    }
-    write(pipes_array[array_index][1], argv[argv_index], strlen(argv[argv_index]));
-    if(writes == 2) {
-      writes++;
-      array_index++;
-    }
-    array_index = (array_index + 1) % slaves;
-  }
-  array_index = 0;
-  for(;array_index < slaves;array_index++)
-    close(pipes_array[array_index][1]);
-
-  array_index = 0;
-  for(;array_index < slaves; array_index++)
-    wait(NULL);
   return 0;
 }
 
 
-
-
-char * int_to_str(int integer) {
-  char * pipefd = malloc(sizeof(char)*BLOCK);
-  int blocks = 1;
-  int copied_digits = 0;
-  if(pipefd == NULL) {
-    printf("failed while allocating mem to transfer fd value");
-    return NULL;
+int run_tasks(int file_count,char * files[]) {
+  int files_delivered = 0;
+  int files_received = 0;
+  int closed_pipes = 0;
+  ssize_t err_value;
+  int slave_pid;
+  
+  deliver_all_once(files);
+  files_delivered = slaves;
+  while(files_received < file_count) {
+    printf("files_received: %d | files_delivered: %d\n",files_received, files_delivered);
+    if((slave_pid = master_read()) < 0)
+      PERROR_ROUTINE("failed when reading from slaves", -1);
+    files_received++;
+    if(files_delivered < file_count) {
+      if((err_value=deliver_task_pid(slave_pid, files[files_delivered])) != 1)
+        PERROR_ROUTINE("failed while giving more tasks to slave", -1);
+        files_delivered++;
+    }
+    if(files_delivered == file_count && closed_pipes == 0) {
+      close_master_pipes();
+      closed_pipes = 1;
+    }
   }
-  pipefd[copied_digits] = '0';
-  while(integer != 0) {
-    if(copied_digits == blocks * BLOCK) {
-      pipefd = realloc(pipefd, blocks * BLOCK + BLOCK);
-      if(pipefd == NULL) {
-        printf("failed while allocating mem to transfer fd value");
-        return NULL;
+  return 0;
+}
+
+
+int deliver_task_pid(int slave_pid, char * filename) {
+  errno = 0;
+  int err_value;
+  char buffer[BUFFER_SIZE];
+  slave_resources slave = get_slave(slave_pid);
+  strcpy(buffer, filename);
+  buffer[strlen(filename)] = '\n';
+  if((err_value = write(slave.master_to_slave_pfd[WRITE_END], buffer, strlen(buffer)) < 0) && errno != 0)
+    PERROR_ROUTINE("failed to write on pipe master to slave", -1);
+  
+  return 1;
+}
+
+slave_resources get_slave(int slave_pid) {
+  for(int i = 0; i < slaves; i++) {
+    if(slave_array[i].pid == slave_pid)
+      return slave_array[i];
+  }
+  return slave_array[0];
+}
+
+void deliver_all_once(char * files[]) {
+  for(int i = 0; i < slaves;i++) {
+    deliver_task_pid(slave_array[i].pid, files[i]);
+  }
+  return;
+}
+
+
+int master_read() {
+  int i = 0;
+  int fd;
+  int slave_pid;
+  FD_ZERO(&read_set);
+  int fd_max = -1;
+  for(; i < slaves;i++) {
+    fd = slave_array[i].slave_to_master_pfd[READ_END];
+    fd_max = fd_max < fd?fd:fd_max;
+    FD_SET(fd, &read_set);
+  }
+  char buffer[BUFFER_SIZE] = {0};
+  fd_max+=1;
+  while(select(fd_max, &read_set, NULL, NULL, NULL) < 0) {
+    for(int i = 0; i<slaves;i++) {
+      fd = slave_array[i].slave_to_master_pfd[READ_END];
+      if(FD_ISSET(fd, &read_set)) {
+        slave_pid = slave_array[i].pid;
+        int bytes_read = read(fd, buffer, sizeof(buffer));
+        printf("bytes_read: %d", bytes_read);
+        buffer[bytes_read] = '\0';
+        printf("%s\n", buffer);
+        return slave_pid;
       }
     }
-    pipefd[copied_digits++] = integer % 10 + '0';
-    integer/=10;
   }
-  pipefd = realloc(pipefd, copied_digits + 1);
-  pipefd[copied_digits] = '\0';
-  return pipefd;
+  for(; i < slaves;i++) {
+    fd = slave_array[i].slave_to_master_pfd[READ_END];
+    FD_CLR(fd, &read_set);
+  }
+  
+  return slave_pid;
+}
+
+void close_master_pipes() {
+  int i = 0;
+  int err_value = 0;
+  for(; i < slaves; i++) {
+     
+    if((err_value = close(slave_array[i].master_to_slave_pfd[WRITE_END])) == -1){
+      perror("couldn't close master to slave pipe write-end");
+      return;
+    }
+  }
+}
+
+
+void on_exit_routine(int slave_count) {
+  int err_value = 0;
+
+  int status;
+  int i = 0;
+  printf("slavecount = %d\n", slave_count);
+  for(; i < slave_count; i++) {
+    while(waitpid(slave_array[i].pid, &status, 0) < 0)  
+
+    if(status != 0) {
+      printf("child with errors: %d\n", slave_array[i].pid);
+      perror("statuscode error when waiting for child");
+    }
+    if((err_value = close(slave_array[i].slave_to_master_pfd[READ_END])) == -1){
+      perror("couldn't close slave to master pipe read-end");
+      return;
+    }
+  }
+  // int stat;
+  // do
+  // {
+  //   if((stat = check_shm_status()) == 0)
+  //     close_shm();
+  // } while (stat != 0 && sleep(1));
+  return;
+}
+
+
+int setup_child_pipes(int index) {
+  int err_value = 0;
+  //close pipe ends that belong to master
+  if((err_value = close(slave_array[index].master_to_slave_pfd[WRITE_END])) == -1)
+    PERROR_ROUTINE("couldn't close master to slave pipe read-end", -1);
+  if((err_value = close(slave_array[index].slave_to_master_pfd[READ_END])) == -1)
+    PERROR_ROUTINE("couldn't close slave to master pipe read-end", -1);
+
+  
+  //setup new stdin and stdout for slaves
+  if((err_value = dup2(slave_array[index].master_to_slave_pfd[READ_END], STDIN_FILENO)) == -1)
+    PERROR_ROUTINE("couldn't dup2 of master to slave read-end with stdin", -1);
+  if((err_value = dup2(slave_array[index].slave_to_master_pfd[WRITE_END], STDOUT_FILENO)) == -1)
+    PERROR_ROUTINE("couldn't dup2 of slave to master write-end with stdin", -1);
+
+  //close for child it's pipes fd since they are now the stdin and stdout
+  if((err_value =  close(slave_array[index].master_to_slave_pfd[READ_END])) == -1)
+    PERROR_ROUTINE("couldn't close master to slave pipe read-end", -1);
+  if((err_value =  close(slave_array[index].slave_to_master_pfd[WRITE_END])) == -1)
+    PERROR_ROUTINE("couldn't close slave to master write-end", -1);
+
+  return 0;
+}
+
+
+int setup_slaves(int args) {
+  int err_value = 0;
+  char * argv[] = {"slave", NULL};
+  slaves = (args) / 2 > SLAVE_MAX? SLAVE_MAX:(args)/2;
+  int index = 0;
+  for(; index < slaves;index++) {
+      if((err_value = pipe(slave_array[index].master_to_slave_pfd)) != 0)
+        PERROR_ROUTINE("master to slave pipe creation failed", -1);
+      if((err_value = pipe(slave_array[index].slave_to_master_pfd)) != 0)
+        PERROR_ROUTINE("slave to master pipe creation failed", -1);
+
+      int pid = fork();
+      if(pid == -1) {
+        PERROR_ROUTINE("fork failed", -1);
+      } else if( pid != 0) {
+        //parent process
+        if((err_value = close(slave_array[index].master_to_slave_pfd[READ_END])) == -1)
+          PERROR_ROUTINE("couldn't close master to slave pipe read-end", -1);
+
+        if((err_value = close(slave_array[index].slave_to_master_pfd[WRITE_END])) == -1)
+          PERROR_ROUTINE("couldn't close master to slave pipe read-end", -1);
+        
+      } else {
+        //child process
+        if((err_value = setup_child_pipes(index)) != 0)
+          PERROR_ROUTINE("error on setup child process pipe", -1);
+          execv(argv[0], argv);
+      }
+  }
+  return index;
 }
