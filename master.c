@@ -44,13 +44,14 @@ slave_resources * get_slave(int slave_pid);
 
 
 int main(int argc, char *argv[]) {
+  printf("%d\n\n\n",argc-1);
   errno = 0;
   if(argc == 1) {
     perror("Cantidad incorrecta de argumentos\n");
     return 0;
   }
   int err_value;
-  if((err_value == setup_slaves(argc)) == -1)
+  if((err_value = setup_slaves(argc)) == -1)
     PERROR_ROUTINE("Couldn't create slaves", errno);
   printf("slaves created: %d\n", slaves);
 
@@ -64,8 +65,8 @@ int main(int argc, char *argv[]) {
 
 
 int run_tasks(int file_count,char * files[]) {
-  int files_delivered = 0;
-  int files_received = 0;
+  int files_delivered = 0; //files delivered al slave
+  int files_received = 0; //files recieved from slave
   int closed_pipes = 0;
   ssize_t err_value;
   int slave_pid;
@@ -75,20 +76,22 @@ int run_tasks(int file_count,char * files[]) {
   while(files_received < file_count) {
     if((slave_pid = master_read(&files_received)) < 0)
       PERROR_ROUTINE("failed when reading from slaves", -1);
-    if(files_delivered < file_count) {
-      if((err_value=deliver_task_pid(slave_pid, files[files_delivered])) != 1)
-        PERROR_ROUTINE("failed while giving more tasks to slave", -1);
-        files_delivered++;
-    }
-    if(files_delivered == file_count && closed_pipes == 0) {
-      close_master_pipes();
-      closed_pipes = 1;
+    if(slave_pid != 0){
+      if(files_delivered < file_count) { //chequear que haya un slave pid para agregar, osea que haya terminado al menos 1 slave
+        if((err_value=deliver_task_pid(slave_pid, files[files_delivered])) != 1)
+          PERROR_ROUTINE("failed while giving more tasks to slave", -1);
+          files_delivered++;
+      }
+      if(files_delivered == file_count && closed_pipes == 0) {
+        close_master_pipes();
+        closed_pipes = 1;
+      }
     }
   }
   return 0;
 }
 
-
+//le da un nuevo trabajo al slave
 int deliver_task_pid(int slave_pid, char * filename) {
   errno = 0;
   int err_value;
@@ -98,6 +101,7 @@ int deliver_task_pid(int slave_pid, char * filename) {
     PERROR_ROUTINE("slave not found", -1);
   strcpy(buffer, filename);
   buffer[strlen(filename)] = '\n';
+  buffer[strlen(filename)+1] = '\0';
   if((err_value = write(slave->master_to_slave_pfd[WRITE_END], buffer, strlen(buffer)) < 0) && errno != 0)
     PERROR_ROUTINE("failed to write on pipe master to slave", -1);
   
@@ -133,20 +137,20 @@ int master_read(int * files_received) {
     FD_SET(fd, &read_set);
   }
   char buffer[BUFFER_SIZE] = {0};
-  fd_max+=1;
-  if(select(fd_max, &read_set, NULL, NULL, NULL) < 0) {
+  fd_max+=1; //valor maximo de fd que tenemos
+  if(select(fd_max, &read_set, NULL, NULL, NULL) < 0) { //select se fija si hay algun fd listo para el recibir un resultado
     PERROR_ROUTINE("failed select", -1);
   } else {
     for(int i = 0; i<slaves;i++) {
       fd = slave_array[i].slave_to_master_pfd[READ_END];
-      if(FD_ISSET(fd, &read_set)) {
+      if(FD_ISSET(fd, &read_set)) { //chequeo si este fd es el que esta listo para recibir el resultado
         slave_pid = slave_array[i].pid;
         //printf("ready to read from slave_pid: %d\n", slave_pid);
         int bytes_read = read(fd, buffer, BUFFER_SIZE);
         if(bytes_read == -1)
           PERROR_ROUTINE("failed while reading from slave", -1);
         buffer[bytes_read] = '\0';
-        printf("%s\n", buffer);
+        printf("%s\n\n", buffer);
         (*files_received)++;
         return slave_pid;
       }
@@ -228,10 +232,10 @@ int setup_child_pipes(int index) {
 
 int setup_slaves(int args) {
   int err_value = 0;
-  char * argv[] = {"slave", NULL};
-  slaves = (args) / 2 > SLAVE_MAX? SLAVE_MAX:(args)/2;
+  char * argv[] = {"slave", NULL}; //crea argumentos
+  slaves = (args) / 2 > SLAVE_MAX? SLAVE_MAX:(args)/2;  //calculo de cantidad de slaves
   int index = 0;
-  for(; index < slaves;index++) {
+  for(; index < slaves;index++) { //loop para crear pipes mts y stm
       if((err_value = pipe(slave_array[index].master_to_slave_pfd)) != 0)
         PERROR_ROUTINE("master to slave pipe creation failed", -1);
       if((err_value = pipe(slave_array[index].slave_to_master_pfd)) != 0)
@@ -244,7 +248,7 @@ int setup_slaves(int args) {
         //parent process
         slave_array[index].pid = pid;
         
-        if((err_value = close(slave_array[index].master_to_slave_pfd[READ_END])) == -1)
+        if((err_value = close(slave_array[index].master_to_slave_pfd[READ_END])) == -1) //slaves usa estos pipes entonces como no sirven los cerramos.
           PERROR_ROUTINE("couldn't close master to slave pipe read-end", -1);
 
         if((err_value = close(slave_array[index].slave_to_master_pfd[WRITE_END])) == -1)

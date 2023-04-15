@@ -3,36 +3,36 @@
 #include <stdio.h>
 #include <string.h>
 
+#define BLOCK 500
 
-result_data * info;
+char * buffer;
 int fd; // file descriptor shm
-const char * sem_id; //id del semaphore
+sem_t* sem_id; //id del semaphore
 void * alloc_mem(size_t bytes_size);
 
-void create_sem(char * name){
-    sem_id = alloc_mem(sizeof(name));
-    strcpy(sem_id,name);
+char * read_buff(){
+    buffer_down();
+    char * out = alloc_mem(sizeof(buffer));
+    char * info = buffer_map(buffer,sizeof(buffer),PROT_READ,MAP_SHARED,0);
+    strcpy(out,info);
+    buffer_up();
+    return out;
 }
 
-void load_name(char * new){
-    info->name = alloc_mem(sizeof(new));
-    strcpy(info->name,new);
+//setter function for the buffer
+void load_buff(char * new_info){
+    buffer_down();
+    char * info = buffer_map(buffer,sizeof(buffer),PROT_READ | PROT_WRITE,MAP_SHARED,0);
+    strcpy(info,new_info);
+    buffer_up();
     return;
 }
 
-void load_md5(char * new){
-    info->md5 = alloc_mem(sizeof(new));
-    strcpy(info->md5,new);
-    return;
-}
 
-void load_pid(int new){
-    info->pid = new;
-    return;
-}
-
-int buffer_open(const char *name, int oflag, mode_t mode){
-    int aux = shm_open(name,oflag,mode);
+//wrapper for shm_open
+int buffer_open(int oflag, mode_t mode){
+    int aux = shm_open("buffer",oflag,mode);
+    buffer = alloc_mem(BLOCK);
     if(aux == -1){
         printf("There was an error while opening the shared memory\n");
         exit(1);
@@ -41,6 +41,7 @@ int buffer_open(const char *name, int oflag, mode_t mode){
     return aux;
 }
 
+//wrapper for mmap
 void *buffer_map(void *addr, size_t length, int prot, int flags, off_t offset){
     void * aux = mmap(addr,length,prot,flags,fd,offset);
     if (aux == MAP_FAILED) {
@@ -50,16 +51,36 @@ void *buffer_map(void *addr, size_t length, int prot, int flags, off_t offset){
     return aux;
 }
 
+//wrapper for munmap
 int buffer_unmap(void*addr, size_t length){
     munmap(addr,length);
 }
 
-int buffer_up(){
-    sem_post(sem_id);
+//wrapper for sem_open
+void buffer_sem_open(){
+    sem_id = sem_open("buffer", O_CREAT);
+    if(sem_id == SEM_FAILED){
+        perror("There was an error while opening/creating the semaphore\n");
+        exit(1);
+    }
 }
 
-int buffer_down(){
-    sem_wait(sem_id);
+//wrapper for sem_post
+int buffer_up(){ 
+    int aux = sem_post(sem_id);
+    if(aux == -1){
+        perror("There was an error while leaving the semaphore\n");
+        exit(1);
+    }
+}
+
+//wrapper for sem_wait
+int buffer_down(){ // wrapper for sem_wait
+    int aux = sem_wait(sem_id);
+    if(aux == -1){
+        perror("There was an error while accesing the semaphore\n");
+        exit(1);
+    }
 }
 
 void buffer_close(){
