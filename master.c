@@ -44,7 +44,6 @@ slave_resources * get_slave(int slave_pid);
 
 
 int main(int argc, char *argv[]) {
-  printf("%d\n\n\n",argc-1);
   errno = 0;
   if(argc == 1) {
     perror("Cantidad incorrecta de argumentos\n");
@@ -53,8 +52,6 @@ int main(int argc, char *argv[]) {
   int err_value;
   if((err_value = setup_slaves(argc)) == -1)
     PERROR_ROUTINE("Couldn't create slaves", errno);
-  printf("slaves created: %d\n", slaves);
-
   err_value = 0;
 
   run_tasks(argc-1, &argv[1]);
@@ -101,10 +98,9 @@ int deliver_task_pid(int slave_pid, char * filename) {
     PERROR_ROUTINE("slave not found", -1);
   strcpy(buffer, filename);
   buffer[strlen(filename)] = '\n';
-  buffer[strlen(filename)+1] = '\0';
-  if((err_value = write(slave->master_to_slave_pfd[WRITE_END], buffer, strlen(buffer)) < 0) && errno != 0)
+  // buffer[strlen(filename)+1] = '\0';
+  if((err_value = write(slave->master_to_slave_pfd[WRITE_END], buffer, strlen(filename)+1) < 0) && errno != 0)
     PERROR_ROUTINE("failed to write on pipe master to slave", -1);
-  
   return 1;
 }
 
@@ -145,7 +141,6 @@ int master_read(int * files_received) {
       fd = slave_array[i].slave_to_master_pfd[READ_END];
       if(FD_ISSET(fd, &read_set)) { //chequeo si este fd es el que esta listo para recibir el resultado
         slave_pid = slave_array[i].pid;
-        //printf("ready to read from slave_pid: %d\n", slave_pid);
         int bytes_read = read(fd, buffer, BUFFER_SIZE);
         if(bytes_read == -1)
           PERROR_ROUTINE("failed while reading from slave", -1);
@@ -182,7 +177,6 @@ void on_exit_routine(int slave_count) {
 
   int status;
   int i = 0;
-  printf("slavecount = %d\n", slave_count);
   for(; i < slave_count; i++) {
     while(waitpid(slave_array[i].pid, &status, 0) < 0)  
 
