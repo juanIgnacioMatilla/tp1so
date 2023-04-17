@@ -43,7 +43,7 @@ char * format_output(char * md5, char * filename) {
     errno = 0;
     char * formated_output = malloc(sizeof(char) * BUFFER_SIZE);
     int size;
-    if((size = sprintf(formated_output, "filename: %s\nmd5: %s\nslave_pid: %d", filename, md5, (int)getpid())) < 0) {
+    if((size = sprintf(formated_output, "filename: %s\nmd5: %s\nslave_pid: %d\n\n", filename, md5, (int)getpid())) < 0) {
         perror("error while formatting md5");
         return NULL;
     }

@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -std=c99
+CFLAGS = -Wall -std=c99 -lrt -pthread
 LIBS = 
 
 all: slave master vista
@@ -12,4 +12,4 @@ vista: vista.c
 	$(CC) $(CFLAGS) -o vista vista.c bufferTAD.c bufferTAD.h
 
 clean:
-	rm -f slave master vista
+	rm -f slave master vista output.txt

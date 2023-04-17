@@ -8,7 +8,7 @@
 #include <sys/select.h>
 #include <stdlib.h>
 #include <sys/wait.h>
-
+#include "bufferTAD.h"
 #define SLAVE_MAX 5
 #define PERROR_ROUTINE(msg, value) {perror(msg);return value;}
 #define READ_END 0
@@ -42,21 +42,28 @@ int deliver_task_pid(int slave_pid, char * filename);
 
 slave_resources * get_slave(int slave_pid);
 
-
+shm_data sh_mem;
+FILE *fp;
 int main(int argc, char *argv[]) {
   errno = 0;
   if(argc == 1) {
     perror("Cantidad incorrecta de argumentos\n");
     return 0;
   }
+  sh_mem = start_shm(S_IRUSR);
+  buffer_open(sh_mem);
+  buffer_map(sh_mem,PROT_WRITE);
+  fp = fopen("output.txt","a+");
+  load_max_files(sh_mem,argc-1);
   int err_value;
+  print_data(sh_mem);
+  sleep(2);
   if((err_value = setup_slaves(argc)) == -1)
     PERROR_ROUTINE("Couldn't create slaves", errno);
   err_value = 0;
-
   run_tasks(argc-1, &argv[1]);
   on_exit_routine(slaves);
-
+  fclose(fp);
   return 0;
 }
 
@@ -145,7 +152,8 @@ int master_read(int * files_received) {
         if(bytes_read == -1)
           PERROR_ROUTINE("failed while reading from slave", -1);
         buffer[bytes_read] = '\0';
-        printf("%s\n\n", buffer);
+        fwrite(buffer , 1 , strlen(buffer) , fp );
+        load_buff(sh_mem,buffer);
         (*files_received)++;
         return slave_pid;
       }

@@ -10,8 +10,9 @@
 
 #define MAX_SIZE 512
 
+int ftruncate(int fildes, off_t length);
+
 typedef struct buffTAD{
-    char * buff; //where the data is going to be stored
     int fd; //file descriptor for the shared mem
     sem_t * sem_id; //id for the sempahore
     void * last_seen;
@@ -30,6 +31,11 @@ shm_data start_shm(mode_t new_mode){
     if(new_shm->sem_id ==  SEM_FAILED)
         perror("There was an error while creating the semaphore\n");
     return new_shm;
+}
+
+void print_data(shm_data info){
+    int * sem_id = (int*) info->sem_id;
+    printf("%d %d",(int) info->fd,*sem_id);
 }
 
 //wrapper for shm_open
@@ -61,8 +67,8 @@ void buffer_down(shm_data info){ // wrapper for sem_wait
 }
 
 //wrapper for mmap
-void buffer_map(shm_data info){
-    void * pos = mmap(NULL, 512,info->mode,MAP_SHARED,info->fd,0);
+void buffer_map(shm_data info,int mode){
+    void * pos = mmap(NULL, 512,mode,MAP_SHARED,info->fd,0);
     if(pos == MAP_FAILED){
         perror("There was an error while mapping the shared memory\n");
     }
@@ -82,11 +88,10 @@ void buffer_close(shm_data info){
 
 //write in the first pos of the shared mem the total amount of files that will be processed
 void load_max_files(shm_data info, int max){
-    int * first = info->first_pos;
+    int * first = (int*) info->first_pos;
     *first = max;
     info->last_seen+=sizeof(int);
-    if(sem_post(info->sem_id) == -1)
-        perror("There was a problem while accessing the semaphore\n");
+    buffer_up(info);
 }
 
 //load the shared mem with the result data
