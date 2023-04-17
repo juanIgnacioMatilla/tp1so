@@ -31,6 +31,7 @@ shm_data start_shm(char * new_name, int new_mode){
     strncpy(new_shm->name,new_name,strlen(new_name));
     new_shm->mode = new_mode;
     new_shm->sem_id = sem_open(new_name, O_CREAT, S_IRUSR|S_IWUSR, 0);
+    //printf("%d\n",(int)new_shm->sem_id);
     if(new_shm->sem_id ==  SEM_FAILED)
         perror("There was an error while creating the semaphore\n");
     return new_shm;
@@ -52,17 +53,15 @@ void buffer_open(shm_data info){
 
 //wrapper for sem_post
 void buffer_up(shm_data info ){ 
-    int aux = sem_post(info->sem_id);
-    if(aux == -1){
+    if(sem_post(info->sem_id) == -1){
         perror("There was an error while leaving the semaphore\n");
         exit(1);
     }
 }
 
 //wrapper for sem_wait
-void buffer_down(shm_data info){ // wrapper for sem_wait
-    int aux = sem_wait(info->sem_id);
-    if(aux == -1){
+void buffer_down(shm_data info){
+    if(sem_wait(info->sem_id) == -1){
         perror("There was an error while accesing the semaphore\n");
         exit(1);
     }

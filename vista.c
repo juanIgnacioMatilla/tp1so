@@ -19,11 +19,10 @@ int main(int argc, char * argv[]){
         name[aux-1] = '\0';
     }
     else if((bytes_read = getline(&name,&len,stdin)) != -1){
-        name[bytes_read - 1] = '\0';
-    }
-    else{
         perror("No shared mem given\n");
+        exit(1);
     }
+    
     shm_data buff = start_shm(argv[2],PROT_READ);
     buffer_open(buff);
     buffer_map(buff,PROT_READ);

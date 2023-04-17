@@ -55,9 +55,10 @@ int main(int argc, char *argv[]) {
   buffer_map(sh_mem,PROT_WRITE);
   fp = fopen("output.txt","a+");
   load_max_files(sh_mem,argc-1);
-  int err_value;
+  //setvbuf(stdout, NULL, _IONBF,0);
   print_data(sh_mem);
   sleep(2);
+  int err_value;
   if((err_value = setup_slaves(argc)) == -1)
     PERROR_ROUTINE("Couldn't create slaves", errno);
   err_value = 0;
