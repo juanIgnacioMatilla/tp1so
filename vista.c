@@ -1,26 +1,43 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <dirent.h>
-#include <stdio.h>
 #include <errno.h>
 #include <string.h>
 #include <sys/mman.h>
 #include "bufferTAD.h"
 
+#define MAX 512
+ssize_t getline(char **lineptr, size_t *n, FILE *stream);
 
 int main(int argc, char * argv[]){
-    if(argc-1 != 3){
-        perror("missing shared mem info\n");
-        return 1;
+    char * name;
+    size_t len;
+    int bytes_read;
+    if(argc == 2){
+        int aux = strlen(argv[2]);
+        strncpy(name,argv[2],aux);
+        name[aux-1] = '\0';
     }
-    shm_data buff = 
-    // shm_data buff = start_shm(S_IRUSR);
-    // buffer_open(buff);
-    // buffer_map(buff,PROT_READ);
-    printf("%d\n",argc);
-    int i = 0;
-    while(argv[i] != NULL){
-        printf("%s\n",argv[i++]);
+    else if((bytes_read = getline(&name,&len,stdin)) != -1){
+        name[bytes_read - 1] = '\0';
     }
+    else{
+        perror("No shared mem given\n");
+    }
+    shm_data buff = start_shm(argv[2],PROT_READ);
+    buffer_open(buff);
+    buffer_map(buff,PROT_READ);
+
+    printf("te estas portando mal\n");
+    int max_files = read_max_files(buff);
+    char out[MAX];
+    while(max_files > 0){
+        memset(out,0,MAX);
+        read_buff(buff,out);
+        printf("%s\n",out);
+        max_files--;
+    }
+    buffer_close(buff);
+    buffer_free(buff);
     return 0;
 }

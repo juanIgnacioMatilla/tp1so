@@ -13,34 +13,36 @@
 int ftruncate(int fildes, off_t length);
 
 typedef struct buffTAD{
+    char name[7];
     int fd; //file descriptor for the shared mem
     sem_t * sem_id; //id for the sempahore
     void * last_seen;
     void * first_pos;
-    mode_t mode;
+    int mode;
 }buffTAD;
 
 //initialize the shared mem
-shm_data start_shm(mode_t new_mode){
+shm_data start_shm(char * new_name, int new_mode){
     shm_data new_shm = calloc(1,sizeof(buffTAD));
     if(new_shm == NULL){
         perror("There was an error while allocating space for the shared memory\n");
     }
+
+    strncpy(new_shm->name,new_name,strlen(new_name));
     new_shm->mode = new_mode;
-    new_shm->sem_id = sem_open("buff_sem", O_CREAT, S_IRUSR|S_IWUSR, 0);
+    new_shm->sem_id = sem_open(new_name, O_CREAT, S_IRUSR|S_IWUSR, 0);
     if(new_shm->sem_id ==  SEM_FAILED)
         perror("There was an error while creating the semaphore\n");
     return new_shm;
 }
 
 void print_data(shm_data info){
-    int * sem_id = (int*) info->sem_id;
-    printf("%d %d",(int) info->fd,*sem_id);
+    printf("%s",info->name);
 }
 
 //wrapper for shm_open
 void buffer_open(shm_data info){
-    info->fd = shm_open("buffer",O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+    info->fd = shm_open(info->name,O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
     if(info->fd == -1){
         perror("There was an error while opening the shared memory\n");
     }
@@ -86,6 +88,10 @@ void buffer_close(shm_data info){
         perror("There was an error while closing the shared memory\n");
 }
 
+void buffer_free(shm_data info){
+    free(info);
+}
+
 //write in the first pos of the shared mem the total amount of files that will be processed
 void load_max_files(shm_data info, int max){
     int * first = (int*) info->first_pos;
@@ -109,6 +115,7 @@ void load_buff(shm_data info, char * data){
 //returns the amount of files that where given to process to the master
 int read_max_files(shm_data info){
     buffer_down(info);
+    printf("seras castigada\n");
     int * pos = (int *)info->last_seen;
     int out = *pos;
     info->last_seen+= sizeof(int);

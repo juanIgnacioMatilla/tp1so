@@ -11,7 +11,7 @@
 #include <stddef.h>
 typedef struct buffTAD * shm_data;
 
-void create_sem(char * name);
+shm_data start_shm(char * new_name, int new_mode);
 void load_max_files(shm_data info, int max);
 void load_buff(shm_data info, char * data);
 int read_max_files(shm_data info);
@@ -24,7 +24,6 @@ void buffer_sem_open();
 void buffer_up(shm_data info);
 void buffer_down(shm_data info);
 void buffer_close(shm_data info);
-shm_data start_shm(mode_t new_mode);
-
+void buffer_free(shm_data info);
 
 #endif

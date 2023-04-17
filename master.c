@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
     perror("Cantidad incorrecta de argumentos\n");
     return 0;
   }
-  sh_mem = start_shm(S_IRUSR);
+  sh_mem = start_shm("buffer",PROT_WRITE);
   buffer_open(sh_mem);
   buffer_map(sh_mem,PROT_WRITE);
   fp = fopen("output.txt","a+");
@@ -75,9 +75,13 @@ int run_tasks(int file_count,char * files[]) {
   ssize_t err_value;
   int slave_pid;
   
+
   deliver_all_once(files);
   files_delivered = slaves;
   while(files_received < file_count) {
+    if(files_received == 1){
+      sleep(2);
+    }
     if((slave_pid = master_read(&files_received)) < 0)
       PERROR_ROUTINE("failed when reading from slaves", -1);
     if(slave_pid != 0){
