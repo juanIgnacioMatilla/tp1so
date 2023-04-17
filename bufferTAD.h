@@ -6,16 +6,21 @@
 #include <fcntl.h>           /* For O_* constants */
 #include <sys/mman.h>
 #include <semaphore.h>
+#include <stdlib.h>
+
+typedef struct buffTAD * smh_data;
 
 void create_sem(char * name);
-void load_buff(char * new);
+void load_buff(smh_data info, char * data);
 char * read_buff();
-int buffer_open(int oflag, mode_t mode);
-void *buffer_map(void *addr, size_t length, int prot, int flags, off_t offset);
+void buffer_open(smh_data info);
+void buffer_map(smh_data info);
 int buffer_unmap(void *addr, size_t length);
 void buffer_sem_open();
-int buffer_up();
-int buffer_down();
-void buffer_close();
+void buffer_up(smh_data info);
+void buffer_down(smh_data info);
+void buffer_close(smh_data info);
+smh_data start_shm(mode_t new_mode);
+void load_max_files(smh_data info, int max);
 
 #endif
