@@ -1,3 +1,5 @@
+// This is a personal academic project. Dear PVS-Studio, please check it.
+// PVS-Studio Static Code Analyzer for C, C++ and C#: http://www.viva64.com
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -42,17 +44,23 @@ int main(void){
 char * format_output(char * md5, char * filename) {
     errno = 0;
     char * formated_output = malloc(sizeof(char) * BUFFER_SIZE);
+    if(formated_output == NULL){
+        perror("There was an error while mallocing space\n");
+        exit(1);
+    }
     int size;
     if((size = sprintf(formated_output, "filename: %s\nmd5: %s\nslave_pid: %d\n\n", filename, md5, (int)getpid())) < 0) {
         perror("error while formatting md5");
+        free(formated_output);
         return NULL;
     }
-    formated_output = realloc(formated_output,sizeof(char) * size);
+    char * temp = realloc(formated_output,sizeof(char) * size);
+    if(temp == NULL){
+        perror("There was an error reallocing memory\n");
+        exit(1);
+    }
+    formated_output = temp;
     formated_output[size] = '\0';
-    if(formated_output == NULL) {
-        perror("couldn't realloc formated_output");
-        return NULL;
-    }
     return formated_output;
 }
 

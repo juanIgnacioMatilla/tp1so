@@ -1,3 +1,5 @@
+// This is a personal academic project. Dear PVS-Studio, please check it.
+// PVS-Studio Static Code Analyzer for C, C++ and C#: http://www.viva64.com
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -43,7 +45,7 @@ int deliver_task_pid(int slave_pid, char * filename);
 slave_resources * get_slave(int slave_pid);
 
 shm_data sh_mem;
-FILE *fp;
+FILE *file_p;
 int main(int argc, char *argv[]) {
   errno = 0;
   if(argc == 1) {
@@ -54,7 +56,7 @@ int main(int argc, char *argv[]) {
   sh_mem = start_shm(shm_name,PROT_WRITE);
   buffer_open(sh_mem);
   buffer_map(sh_mem,PROT_WRITE);
-  fp = fopen("output.txt","a+");
+  file_p = fopen("output.txt","a+");
   load_max_files(sh_mem,argc-1);
   setvbuf(stdout, NULL, _IONBF,0);
   printf("%s",shm_name);
@@ -64,7 +66,7 @@ int main(int argc, char *argv[]) {
   err_value = 0;
   run_tasks(argc-1, &argv[1]);
   on_exit_routine(slaves);
-  fclose(fp);
+  fclose(file_p);
   buffer_close(sh_mem);
   buffer_free(sh_mem);
   return 0;
@@ -108,7 +110,7 @@ int deliver_task_pid(int slave_pid, char * filename) {
   strcpy(buffer, filename);
   buffer[strlen(filename)] = '\n';
   // buffer[strlen(filename)+1] = '\0';
-  if((err_value = write(slave->master_to_slave_pfd[WRITE_END], buffer, strlen(filename)+1) < 0) && errno != 0)
+  if((err_value = (write(slave->master_to_slave_pfd[WRITE_END], buffer, strlen(filename)+1) < 0)) && errno != 0)
     PERROR_ROUTINE("failed to write on pipe master to slave", -1);
   return 1;
 }
@@ -141,7 +143,7 @@ int master_read(int * files_received) {
     fd_max = fd_max < fd?fd:fd_max;
     FD_SET(fd, &read_set);
   }
-  char buffer[BUFFER_SIZE] = {0};
+  char buffer[BUFFER_SIZE+1] = {0};
   fd_max+=1; //valor maximo de fd que tenemos
   if(select(fd_max, &read_set, NULL, NULL, NULL) < 0) { //select se fija si hay algun fd listo para el recibir un resultado
     PERROR_ROUTINE("failed select", -1);
@@ -154,7 +156,7 @@ int master_read(int * files_received) {
         if(bytes_read == -1)
           PERROR_ROUTINE("failed while reading from slave", -1);
         buffer[bytes_read] = '\0';
-        int err_value = fwrite(buffer , 1 , strlen(buffer) , fp);
+        int err_value = fwrite(buffer , 1 , strlen(buffer) , file_p);
         if(err_value == 0)
           PERROR_ROUTINE("failed while writing to file", -1);
         load_buff(sh_mem,buffer);
