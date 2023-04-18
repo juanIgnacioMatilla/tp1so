@@ -25,5 +25,5 @@ void buffer_up(shm_data info);
 void buffer_down(shm_data info);
 void buffer_close(shm_data info);
 void buffer_free(shm_data info);
-
+void buffer_unlink(shm_data info);
 #endif

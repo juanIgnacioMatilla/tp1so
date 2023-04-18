@@ -13,7 +13,7 @@
 #define PERROR_ROUTINE(msg, value) {perror(msg);return value;}
 #define READ_END 0
 #define WRITE_END 1
-#define BUFFER_SIZE 256
+#define BUFFER_SIZE 128
 
 
 typedef struct {
@@ -50,14 +50,14 @@ int main(int argc, char *argv[]) {
     perror("Cantidad incorrecta de argumentos\n");
     return 0;
   }
-  sh_mem = start_shm("buffer",PROT_WRITE);
+  char * shm_name = "buffer";
+  sh_mem = start_shm(shm_name,PROT_WRITE);
   buffer_open(sh_mem);
   buffer_map(sh_mem,PROT_WRITE);
   fp = fopen("output.txt","a+");
   load_max_files(sh_mem,argc-1);
-  //setvbuf(stdout, NULL, _IONBF,0);
-  print_data(sh_mem);
-  sleep(2);
+  setvbuf(stdout, NULL, _IONBF,0);
+  printf("%s",shm_name);
   int err_value;
   if((err_value = setup_slaves(argc)) == -1)
     PERROR_ROUTINE("Couldn't create slaves", errno);
@@ -65,6 +65,8 @@ int main(int argc, char *argv[]) {
   run_tasks(argc-1, &argv[1]);
   on_exit_routine(slaves);
   fclose(fp);
+  buffer_close(sh_mem);
+  buffer_free(sh_mem);
   return 0;
 }
 
@@ -72,10 +74,8 @@ int main(int argc, char *argv[]) {
 int run_tasks(int file_count,char * files[]) {
   int files_delivered = 0; //files delivered al slave
   int files_received = 0; //files recieved from slave
-  int closed_pipes = 0;
   ssize_t err_value;
   int slave_pid;
-  
 
   deliver_all_once(files);
   files_delivered = slaves;
@@ -91,12 +91,9 @@ int run_tasks(int file_count,char * files[]) {
           PERROR_ROUTINE("failed while giving more tasks to slave", -1);
           files_delivered++;
       }
-      if(files_delivered == file_count && closed_pipes == 0) {
-        close_master_pipes();
-        closed_pipes = 1;
-      }
     }
   }
+  close_master_pipes();
   return 0;
 }
 
@@ -157,7 +154,9 @@ int master_read(int * files_received) {
         if(bytes_read == -1)
           PERROR_ROUTINE("failed while reading from slave", -1);
         buffer[bytes_read] = '\0';
-        fwrite(buffer , 1 , strlen(buffer) , fp );
+        int err_value = fwrite(buffer , 1 , strlen(buffer) , fp);
+        if(err_value == 0)
+          PERROR_ROUTINE("failed while writing to file", -1);
         load_buff(sh_mem,buffer);
         (*files_received)++;
         return slave_pid;
@@ -202,12 +201,6 @@ void on_exit_routine(int slave_count) {
       return;
     }
   }
-  // int stat;
-  // do
-  // {
-  //   if((stat = check_shm_status()) == 0)
-  //     close_shm();
-  // } while (stat != 0 && sleep(1));
   return;
 }
 

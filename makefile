@@ -12,4 +12,6 @@ vista: vista.c
 	$(CC) $(CFLAGS) -o vista vista.c bufferTAD.c bufferTAD.h
 
 clean:
-	rm -f slave master vista output.txt
+	rm -f slave master vista output.txta
+
+.PHONY: clean, all
